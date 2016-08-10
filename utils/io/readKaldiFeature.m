@@ -1,11 +1,11 @@
-function [name mfcc] = readKaldiFeature(fileName)
+function [name feat] = readKaldiFeature(fileName)
 
 endian = 'l';
 
-% FID = fopen('D:\Data\MagorBN\MFCC_LDA_MLLT_MVN\Ark\cml_mfcc_train.10.ark', 'r');
-FID = fopen(fileName, 'r');
+FID = fopen('G:\Github\experiments\decode\data\unisound\20151010_cv10\forward.ark', 'r');
+%FID = fopen(fileName, 'r');
 name = {};
-mfcc = {};
+feat = {};
 byte_cnt = 1;
 while 1
     [tmp,byte_cnt] = readUttName(FID, byte_cnt);
@@ -16,12 +16,12 @@ while 1
     % fprintf('name{%d} = %s\n', length(name), name{end});
     header = readHeader(FID, byte_cnt, endian);
     data = fread(FID, header.nframe * header.dim, 'float32', 0, endian)';
-    mfcc{end+1} = reshape(data, header.dim, header.nframe);
+    feat{end+1} = reshape(data, header.dim, header.nframe);
     if 0
-        imagesc(mfcc{end});
+        imagesc(feat{end});
         title(regexprep(name{end}, '_', '\\_'));
         colorbar;
-        pause
+        pause(4);
     end
 end
 fclose(FID);

@@ -1,36 +1,37 @@
 function modules = readKaldiNetwork(file_name)
-% file_name = 'tri1a_dnn_ctx5_plain_1500b/nnet/nnet_429_1500_1500_1500_1500_2584_iter14_learnrate3.125e-05_tr68.77_cv54.38';
+file_name = 'G:\corpus\final.nnet.txt';
 FID = fopen(file_name, 'r');
 
 modules = {};
-line = fgetl(FID);
-while 1
-    if line(1) == '<'
-        if length(regexp(line, '<Nnet>'))>0 || length(regexp(line, '</Nnet>'))>0
-            line = fgetl(FID);
-            continue;
-        end
-        
+while ~feof(FID)
+    line = fgetl(FID);
+    if ~isempty(strfind(line, '<!') ),  continue; end % end of component
+    if ~isempty(regexp(line,'</?Nnet>', 'once')), continue; end; %for nnet start of end tag;
+    if line(1) == '<',
         fprintf('Reading %s - %s\n', line, datestr(now));
-        idx = regexp(line, '>');
-        modules{end+1}.name = line(2:idx(1)-1);
-        tmp = textscan(line(idx(1)+1:end), '%d %d');
-        modules{end}.inputDim = tmp{2};
-        modules{end}.outputDim = tmp{1};
+        tokens=regexp(line, '<(\w+)>\s*(\d+)\s*(\d+)', 'tokens');
+        modules{end+1}.name=tokens{1}{1};
+        modules{end}.in=str2num(tokens{1}{3});
+        modules{end}.out=str2num(tokens{1}{2});
+
+        line = fgetl(FID);
+        tokens=regexp(line, '<(\w+)>\s*(\d+)', 'tokens');
+        for i=1:length(tokens)
+            eval ([ 'modules{end}.' tokens{i}{1} '=' tokens{i}{2}  ';']);
+        end
         
         switch modules{end}.name
             case {'affinetransform', 'AffineTransform'}
-                modules{end}.transform = readKaldiTransform(FID, modules{end}.outputDim);
-                modules{end}.bias = readKaldiTransform(FID, 1);
+                modules{end}.transform = readmat(FID, modules{end}.in);
+                modules{end}.bias = readmat(FID, modules{end}.out);
                 
             case {'lineartransform', 'LinearTransform'}
-                modules{end}.transform = readKaldiTransform(FID, modules{end}.outputDim);
+                modules{end}.transform = readmat(FID, modules{end}.in);
                 
             case {'sigmoid', 'softmax', 'Sigmoid', 'Softmax'}
                 % Do nothing
-                
             case {'Splice', 'splice', 'AddShift', 'addshift', 'rescale', 'Rescale'}
-                modules{end}.transform = readKaldiTransform(FID, 1);
+                modules{end}.transform = readmat(FID, modules{end}.out);
 
             otherwise
                 fprintf('Error: unknown processing step: %s~\n', modules{end}.name);
@@ -39,43 +40,41 @@ while 1
     else
         break;
     end
-    line = fgetl(FID);
 end
 fclose(FID);
 
 
-%%
-function transform = readKaldiTransform(FID, M)
-line = fgetl(FID);
+function str = read_vec(fid)
+str=[];
+while ~feof(fid)
+    txt=fgetl(fid);
+    nstart = strfind(txt, '[');
+    if isempty(nstart),
+       continue
+    end
+    %find the start
+    str=txt(nstart:end);
+    nend = strfind(str, ']');
+    if ~isempty(nend)
+         str = str(1:nend);
+        return 
+    end
+    break;
+end
 
-% if length(regexp(line, '\]'))>0
-%     line = fgetl(FID);
-%     line = regexprep(line, '\[', '');
-% else
-idx = regexp(line, '\[');
-if length(idx) > 0
-    line = line(idx+1:end);
-    if length(regexprep(line, ' ', ''))==0
-        line = fgetl(FID);
+while ~feof(fid)
+    txt=fgetl(fid);
+    nend = strfind(txt, ']');
+    if isempty(nend)
+        str= [str  txt];
+        continue;
     end
-else
-    line = fgetl(FID);
+    %find the end
+    str= [str txt(1:nend)];
+    break 
 end
-for i=1:M-1
-    transform(i,:) = str2num(line);
-    line = fgetl(FID);
-end
-if length(regexprep(line, '\]| ', '')) > 0
-    if length(regexp(line, '\]'))==0   
-        line2 = fgetl(FID); % Read the ]
-    end
-    line = regexprep(line, '\]', '');
-else
-    line = fgetl(FID);
-    line2 = fgetl(FID); % Read the ]
-end
-if M==1
-    transform = str2num(line);
-else
-    transform(end+1,:) = str2num(line);
-end
+   
+
+function m = readmat(fid, ncol)
+m = eval( read_vec(fid));
+m = reshape(m, ncol,[]);
